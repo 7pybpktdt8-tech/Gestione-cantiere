@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cantieri Pro</title>
+
+<style>
+body{background:#0c0c0c;color:#fff;font-family:sans-serif;padding:15px}
+h2{margin-bottom:10px}
+input,button,select{padding:10px;margin:5px 0;width:100%;border:none;border-radius:6px}
+button{background:#e8a020;color:#000;font-weight:bold}
+.card{background:#1c1c1c;padding:12px;margin:10px 0;border-radius:8px}
+.small{font-size:12px;color:#aaa}
+.top{background:#141414;padding:10px;border-radius:8px;margin-bottom:10px}
+</style>
+
+</head>
+<body>
+
+<h2>Cantieri</h2>
+
+<div class="top">
+<input id="c-name" placeholder="Nome cantiere">
+<input id="c-budget" type="number" placeholder="Budget €">
+<button onclick="addCantiere()">+ Nuovo cantiere</button>
+</div>
+
+<div id="cantieri"></div>
+
+<script>
+let cantieri = JSON.parse(localStorage.getItem("cantieri")||"[]");
+
+function save(){
+ localStorage.setItem("cantieri",JSON.stringify(cantieri));
+}
+
+function addCantiere(){
+ const nome=document.getElementById("c-name").value;
+ const budget=parseFloat(document.getElementById("c-budget").value)||0;
+ if(!nome)return;
+
+ cantieri.push({
+   id:Date.now(),
+   nome,
+   budget,
+   giorni:[]
+ });
+
+ save(); render();
+}
+
+function addGiorno(id){
+ const lavoro=prompt("Lavoro eseguito:");
+ if(!lavoro)return;
+
+ const costo=parseFloat(prompt("Costo materiali €:"))||0;
+ const operai=parseInt(prompt("Numero operai:"))||0;
+ const ore=parseInt(prompt("Ore lavorate:"))||0;
+ const avanz=parseFloat(prompt("Avanzamento % oggi:"))||0;
+
+ const c=cantieri.find(x=>x.id==id);
+
+ c.giorni.push({
+   data:new Date().toISOString().slice(0,10),
+   lavoro,
+   costo,
+   operai,
+   ore,
+   avanz
+ });
+
+ save(); render();
+}
+
+function render(){
+ let html="";
+
+ cantieri.forEach(c=>{
+   let costi=0,prog=0;
+
+   c.giorni.forEach(g=>{
+     costi+=g.costo;
+     prog+=g.avanz;
+   });
+
+   const saldo=c.budget-costi;
+
+   html+=`
+   <div class="card">
+     <b>${c.nome}</b><br>
+     <span class="small">Budget € ${c.budget}</span><br>
+     <span class="small">Costi € ${costi}</span><br>
+     <span class="small">Saldo € ${saldo}</span><br>
+     <span class="small">Avanzamento ${prog}%</span><br>
+     <button onclick="addGiorno(${c.id})">+ Giorno lavoro</button>
+     <button onclick="toggle(${c.id})">Dettagli</button>
+     <div id="d-${c.id}" style="display:none">
+       ${c.giorni.map(g=>`
+         <div class="card">
+           <b>${g.data}</b><br>
+           ${g.lavoro}<br>
+           € ${g.costo} | ${g.operai} operai | ${g.ore}h | +${g.avanz}%
+         </div>
+       `).join("")}
+     </div>
+   </div>`;
+ });
+
+ document.getElementById("cantieri").innerHTML=html;
+}
+
+function toggle(id){
+ const el=document.getElementById("d-"+id);
+ el.style.display=el.style.display==="none"?"block":"none";
+}
+
+// BACKUP
+function exportData(){
+ const blob=new Blob([JSON.stringify(cantieri)],{type:"application/json"});
+ const a=document.createElement("a");
+ a.href=URL.createObjectURL(blob);
+ a.download="backup.json";
+ a.click();
+}
+
+function importData(file){
+ const r=new FileReader();
+ r.onload=e=>{
+   cantieri=JSON.parse(e.target.result);
+   save(); render();
+ };
+ r.readAsText(file);
+}
+
+// SERVICE WORKER INLINE
+if ('serviceWorker' in navigator) {
+ const code=`
+  self.addEventListener('install',e=>{
+   e.waitUntil(caches.open('v1').then(c=>c.addAll(['./'])))
+  });
+  self.addEventListener('fetch',e=>{
+   e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request)))
+  });
+ `;
+ const blob=new Blob([code],{type:'text/javascript'});
+ navigator.serviceWorker.register(URL.createObjectURL(blob));
+}
+
+render();
+</script>
+
+<button onclick="exportData()">Backup</button>
+<input type="file" onchange="importData(this.files[0])">
+
+</body>
+</html>
